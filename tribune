@@ -3,14 +3,15 @@
 function show_help() {
     cat <<EOT
 usage: $0 -h
-       $0 [-n] [-t] [-c cookie] [-i last id] url
+       $0 [-s statefile] [-n] [-t] [-c cookie] [-i last id] url
 
-            -n          Do not output TSV header
-            -t          Tribune's tags are encoded (tags not encoded and CDATA-encoding not supported yet)
-            -c          Send cookie when retrieving backend
-            -i last id  Only return posts with an id higher than last id
+            -s statefile  Retrieve last id from statefile, and store it there
+            -n            Do not output TSV header
+            -t            Tribune's tags are encoded (tags not encoded and CDATA-encoding not supported yet)
+            -c            Send cookie when retrieving backend
+            -i last id    Only return posts with an id higher than last id
 
-            url         XML backend URL
+            url           XML backend URL
 
 EOT
 }
@@ -43,6 +44,14 @@ function parse_dom() {
             eval local $ATTRIBUTES
             ID="$id"
             TIME="$time"
+
+            if [ -e "$STATEFILE" -a "$ID" -gt "$LAST_ID" ]; then
+                STATE=$(cat "$STATEFILE")
+
+                if [ "$ID" -gt "$STATE" ]; then
+                    echo "$ID" > "$STATEFILE"
+                fi
+            fi
             ;;
         message)
             MESSAGE="$CONTENT"
@@ -76,9 +85,10 @@ TAGS_ENCODED=0
 COOKIE=""
 LAST_ID=0
 HEADER=1
+STATEFILE=""
 
 OPTIND=1
-while getopts "hntc:i:" opt; do
+while getopts "hns:tc:i:" opt; do
     case "$opt" in
         h)
             show_help
@@ -91,6 +101,13 @@ while getopts "hntc:i:" opt; do
         n)  HEADER=0
             ;;
         i)  LAST_ID=$OPTARG
+            ;;
+        s)  STATEFILE=$OPTARG
+            if [ -e "$STATEFILE" ]; then
+                LAST_ID=$(cat "$STATEFILE")
+            else
+                echo "$LAST_ID" > "$STATEFILE"
+            fi
             ;;
     esac
 done
