@@ -1,0 +1,105 @@
+#!/bin/bash
+
+function show_help() {
+    cat <<EOT
+usage: $0 -h
+       $0 [-n] [-t] [-c cookie] [-i last id] url
+
+            -n          Do not output TSV header
+            -t          Tribune's tags are encoded (CDATA-encoding not supported yet)
+            -c          Send cookie when retrieving backend
+            -i last id  Only return posts with an id higher than last id
+
+            url         XML backend URL
+
+EOT
+}
+
+function htmldecode() {
+    # Use whatever is available, fallback to simple sed on last resort.
+
+    if which perl &>/dev/null; then
+        echo "$1" | perl -MHTML::Entities -le 'while(<>) {print decode_entities($_);}'
+    elif which php &>/dev/null; then
+        echo "$1" | php -r 'while(($line=fgets(STDIN)) !== FALSE) echo html_entity_decode($line, ENT_QUOTES|ENT_HTML401);'
+    elif which w3m &>/dev/null; then
+        echo "$1" | w3m -dump -T text/html
+    else
+        echo "$1" | sed 's/&lt;/</g; s/&gt;/>/g; s/&quot;/"/g; s/&#39;/'"'"'/g; s/&amp;/\&/g'
+    fi
+}
+
+function read_dom() {
+    IFS='>' read -d \< ENTITY CONTENT
+    RETURN=$?
+    TAG_NAME=${ENTITY%% *}
+    ATTRIBUTES=${ENTITY#* }
+    return $RETURN
+}
+
+function parse_dom() {
+    case $TAG_NAME in
+        post)
+            eval local $ATTRIBUTES
+            ID="$id"
+            TIME="$time"
+            ;;
+        message)
+            MESSAGE="$CONTENT"
+
+            if [ "$TAGS_ENCODED" -gt 0 ]; then
+                MESSAGE="$(htmldecode "$MESSAGE")"
+            fi
+            ;;
+        login)
+            LOGIN="$CONTENT"
+            ;;
+        info)
+            INFO="$CONTENT"
+            ;;
+        /post)
+            if [ "$LAST_ID" -eq 0 -o "$ID" -gt "$LAST_ID" ]; then
+                printf "%s\t%s\t%s\t%s\t%s\n" "$ID" "$TIME" "$INFO" "$LOGIN" "$MESSAGE"
+            fi
+            ;;
+    esac
+}
+
+function parse_backend() {
+    [ "$HEADER" -gt 0 ] && printf "id\ttime\tinfo\tlogin\tmessage\n"
+    curl --silent --cookie "$COOKIE" "$BACKEND" | sed 's/\\/\\\\/g' | while read_dom; do
+        parse_dom
+    done | sort -rn
+}
+
+TAGS_ENCODED=0
+COOKIE=""
+LAST_ID=0
+HEADER=1
+
+OPTIND=1
+while getopts "hntc:i:" opt; do
+    case "$opt" in
+        h)
+            show_help
+            exit 0
+            ;;
+        t)  TAGS_ENCODED=1
+            ;;
+        c)  COOKIE=$OPTARG
+            ;;
+        n)  HEADER=0
+            ;;
+        i)  LAST_ID=$OPTARG
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+BACKEND=$@
+
+if [ -n "$BACKEND" ]; then
+    parse_backend
+else
+    show_help
+fi
