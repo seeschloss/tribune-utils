@@ -6,7 +6,7 @@ usage: $0 -h
        $0 [-n] [-t] [-c cookie] [-i last id] url
 
             -n          Do not output TSV header
-            -t          Tribune's tags are encoded (CDATA-encoding not supported yet)
+            -t          Tribune's tags are encoded (tags not encoded and CDATA-encoding not supported yet)
             -c          Send cookie when retrieving backend
             -i last id  Only return posts with an id higher than last id
 
