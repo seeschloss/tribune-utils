@@ -76,7 +76,7 @@ function parse_dom() {
 
 function parse_backend() {
     [ "$HEADER" -gt 0 ] && printf "id\ttime\tinfo\tlogin\tmessage\n"
-    curl --silent --cookie "$COOKIE" "$BACKEND" | sed 's/\\/\\\\/g' | while read_dom; do
+    curl --silent --cookie "$COOKIE" "$BACKEND" | sed 's/\\/\\\\/g' | tr '\n\r' '  ' | while read_dom; do
         parse_dom
     done | sort -rn
 }
